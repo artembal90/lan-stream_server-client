@@ -29,6 +29,7 @@ async def test_websocket_requires_peer_id() -> None:
         await client.start_server()
         ws = await client.ws_connect("/ws")
         message = await ws.receive()
-        assert message.type == WSMsgType.CLOSED
+        assert message.type == WSMsgType.CLOSE
+        assert message.data == 4001
         assert ws.close_code == 4001
         await client.close()
