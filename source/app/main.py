@@ -5,8 +5,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
+import time
 import uuid
 
+import psutil
 from aiortc import RTCPeerConnection, RTCRtpSender, RTCSessionDescription
 
 from source.capture.screen import CaptureConfig, ScreenCapture
@@ -30,11 +33,27 @@ async def wait_for_ice(pc: RTCPeerConnection) -> None:
     await event.wait()
 
 
+async def metrics_loop(track_list: list[DesktopVideoTrack]) -> None:
+    process = psutil.Process(os.getpid())
+    previous_frames = 0
+    previous_time = time.perf_counter()
+    while True:
+        await asyncio.sleep(1)
+        now = time.perf_counter()
+        frames = sum(track.frames for track in track_list)
+        fps = (frames - previous_frames) / max(now - previous_time, 0.001)
+        previous_frames, previous_time = frames, now
+        rss_mb = process.memory_info().rss / (1024 * 1024)
+        cpu = process.cpu_percent(None)
+        log.info("metrics cpu=%.1f%% ram=%.1fMB encoded/captured_fps=%.1f viewers=%d", cpu, rss_mb, fps, len(track_list))
+
+
 async def run(args: argparse.Namespace) -> None:
     peer_id = args.source_id or f"source-{uuid.uuid4()}"
     signaling = SignalingClient(args.server, peer_id)
     capture = ScreenCapture(CaptureConfig(args.monitor, args.width, args.height, args.fps))
     pcs: set[RTCPeerConnection] = set()
+    tracks: list[DesktopVideoTrack] = []
 
     await signaling.connect()
     await signaling.send({
@@ -47,6 +66,7 @@ async def run(args: argparse.Namespace) -> None:
         "bitrate": args.bitrate,
     })
     log.info("source %s registered as %s", args.name, peer_id)
+    metrics_task = asyncio.create_task(metrics_loop(tracks))
 
     try:
         while True:
@@ -58,10 +78,10 @@ async def run(args: argparse.Namespace) -> None:
 
             pc = RTCPeerConnection()
             pcs.add(pc)
-            sender = pc.addTrack(DesktopVideoTrack(capture))
+            track = DesktopVideoTrack(capture)
+            tracks.append(track)
+            sender = pc.addTrack(track)
 
-            # Prefer H.264 for the first LAN implementation. Hardware encoders
-            # are intentionally deferred to the optimization stage.
             h264_codecs = [
                 codec for codec in RTCRtpSender.getCapabilities("video").codecs
                 if codec.mimeType.lower() == "video/h264"
@@ -69,16 +89,13 @@ async def run(args: argparse.Namespace) -> None:
             if h264_codecs:
                 sender.setCodecPreferences(h264_codecs)
 
-            await pc.setRemoteDescription(
-                RTCSessionDescription(
-                    sdp=message["sdp"],
-                    type=message.get("sdp_type", "offer"),
-                )
-            )
+            await pc.setRemoteDescription(RTCSessionDescription(
+                sdp=message["sdp"],
+                type=message.get("sdp_type", "offer"),
+            ))
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
             await wait_for_ice(pc)
-
             local = pc.localDescription
             if local is None:
                 raise RuntimeError("failed to create local SDP answer")
@@ -92,6 +109,7 @@ async def run(args: argparse.Namespace) -> None:
             })
             log.info("answered viewer %s", message.get("sender"))
     finally:
+        metrics_task.cancel()
         for pc in pcs:
             await pc.close()
         capture.close()
