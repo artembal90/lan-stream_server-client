@@ -1,6 +1,7 @@
 aiortc
 aiohttp
 mss
+numpy
 av
 opencv-python
 psutil
