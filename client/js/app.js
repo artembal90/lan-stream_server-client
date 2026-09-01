@@ -33,7 +33,6 @@ async function connectSource(sourceId, name) {
   grid.append(tile);
   const video = tile.querySelector('video');
   const statsElement = tile.querySelector('.stats');
-
   const peerId = `viewer-${crypto.randomUUID()}`;
   const pc = createPeerConnection((stream) => { video.srcObject = stream; });
   const ws = new WebSocket(`${serverBase.replace(/^http/, 'ws')}/ws?peer_id=${encodeURIComponent(peerId)}`);
@@ -42,7 +41,6 @@ async function connectSource(sourceId, name) {
   ws.onopen = () => ws.send(JSON.stringify({
     type: 'offer', target: sourceId, session_id: sourceId, sdp: offer.sdp, sdp_type: offer.type,
   }));
-
   ws.onmessage = async (event) => {
     const message = JSON.parse(event.data);
     if (message.type === 'answer') {
@@ -50,25 +48,35 @@ async function connectSource(sourceId, name) {
     }
   };
 
+  let previousBytes = 0;
+  let previousTime = performance.now();
   const timer = setInterval(async () => {
     if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
       clearInterval(timer);
       return;
     }
     const reports = await pc.getStats();
+    const now = performance.now();
+    let text = `state: ${pc.connectionState}`;
     for (const report of reports.values()) {
       if (report.type === 'inbound-rtp' && report.kind === 'video') {
-        const kbps = report.bytesReceived ? Math.round((report.bytesReceived * 8) / 1000) : 0;
-        statsElement.textContent = `state: ${pc.connectionState}\ncodec: ${report.codecId ?? 'n/a'}\nreceived: ${kbps} kb\nframes: ${report.framesReceived ?? 0} (decoded ${report.framesDecoded ?? 0})`;
+        const deltaSeconds = Math.max((now - previousTime) / 1000, 0.001);
+        const bitrateKbps = Math.round(Math.max((report.bytesReceived - previousBytes) * 8 / deltaSeconds / 1000, 0));
+        previousBytes = report.bytesReceived ?? previousBytes;
+        previousTime = now;
+        text += `\ncodec: ${report.codecId ?? 'n/a'}`;
+        text += `\nbitrate: ${bitrateKbps} kbps`;
+        text += `\nframes: ${report.framesReceived ?? 0} (decoded ${report.framesDecoded ?? 0})`;
+        if (report.framesPerSecond != null) text += `\nFPS: ${report.framesPerSecond}`;
       }
       if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.currentRoundTripTime != null) {
-        statsElement.textContent += `\nrtt: ${Math.round(report.currentRoundTripTime * 1000)} ms`;
+        text += `\nRTT: ${Math.round(report.currentRoundTripTime * 1000)} ms`;
       }
     }
+    statsElement.textContent = text;
   }, 1000);
 }
 
 document.querySelector('#refresh').onclick = () => loadSources().catch(showError);
 loadSources().catch(showError);
-
 function showError(error) { sourcesElement.textContent = `Ошибка: ${error.message}`; }
