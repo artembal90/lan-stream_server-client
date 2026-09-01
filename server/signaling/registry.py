@@ -1,4 +1,6 @@
-"""In-memory registries for sources and viewers."""
+"""In-memory registry of live stream sources."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -8,6 +10,10 @@ from datetime import datetime, timezone
 class StreamSource:
     source_id: str
     name: str
+    width: int = 0
+    height: int = 0
+    fps: int = 0
+    bitrate: int = 0
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
