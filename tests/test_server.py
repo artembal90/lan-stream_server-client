@@ -1,5 +1,5 @@
 import pytest
-from aiohttp import web
+from aiohttp import WSMsgType
 from aiohttp.test_utils import TestClient, TestServer
 
 from server.app.main import create_app
@@ -28,5 +28,7 @@ async def test_websocket_requires_peer_id() -> None:
         client = TestClient(server)
         await client.start_server()
         ws = await client.ws_connect("/ws")
-        assert ws.closed
+        message = await ws.receive()
+        assert message.type == WSMsgType.CLOSED
+        assert ws.close_code == 4001
         await client.close()
