@@ -31,20 +31,20 @@ jobs:
       - name: Build source EXE
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onefile --name LAN-Desktop-Stream-trey --paths . source/app/main.py
+          pyinstaller --noconfirm --clean --onefile --name lan-stream_server-client --paths . source/app/main.py
 
       - name: Smoke test EXE
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/LAN-Desktop-Stream-trey.exe")) { throw "EXE was not created" }
-          $size = (Get-Item "dist/LAN-Desktop-Stream-trey.exe").Length
+          if (-not (Test-Path "dist/lan-stream_server-client.exe")) { throw "EXE was not created" }
+          $size = (Get-Item "dist/lan-stream_server-client.exe").Length
           if ($size -lt 1000000) { throw "EXE is unexpectedly small: $size bytes" }
           Write-Host "Built EXE size: $size bytes"
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LAN-Desktop-Stream-trey-windows
-          path: dist/LAN-Desktop-Stream-trey.exe
+          name: lan-stream_server-client-windows
+          path: dist/lan-stream_server-client.exe
           if-no-files-found: error
           retention-days: 14
