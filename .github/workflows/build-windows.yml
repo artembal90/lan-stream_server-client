@@ -1,0 +1,50 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build source EXE
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --name LAN-Desktop-Stream-trey --paths . source/app/main.py
+
+      - name: Smoke test EXE
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/LAN-Desktop-Stream-trey.exe")) { throw "EXE was not created" }
+          $size = (Get-Item "dist/LAN-Desktop-Stream-trey.exe").Length
+          if ($size -lt 1000000) { throw "EXE is unexpectedly small: $size bytes" }
+          Write-Host "Built EXE size: $size bytes"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LAN-Desktop-Stream-trey-windows
+          path: dist/LAN-Desktop-Stream-trey.exe
+          if-no-files-found: error
+          retention-days: 14
