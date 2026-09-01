@@ -3,6 +3,7 @@
 from aiohttp import web
 
 from server.signaling.websocket import signaling
+from server.streams.api import sources
 
 
 async def health(request: web.Request) -> web.Response:
@@ -13,6 +14,7 @@ def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/health", health)
     app.router.add_get("/ws", signaling)
+    app.router.add_get("/api/sources", sources)
     return app
 
 
