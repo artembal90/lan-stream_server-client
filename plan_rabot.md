@@ -38,7 +38,7 @@
 - WebRTC API.
 - `<video>` для отображения потоков.
 - Полноэкранный режим.
-- Сетка нескольких трансляций.
+- Сетка нескольких потоков.
 
 ## 3. Логика подключения
 
@@ -226,12 +226,14 @@ IP самого ПК-источника пользователю вводить 
 ### Этап 1 — базовая архитектура
 
 - [x] Создать структуру проекта.
-- [x] Реализовать сервер — базовый HTTP/health endpoint и WebSocket signaling foundation.
-- [ ] Реализовать источник на Python.
-- [ ] Реализовать базовый browser-клиент.
-- [ ] Реализовать WebSocket signaling.
-- [ ] Реализовать SDP offer/answer.
-- [ ] Реализовать ICE candidates.
+- [x] Реализовать сервер — HTTP health endpoint, WebSocket signaling endpoint, connection manager и базовый реестр источников.
+- [x] Реализовать источник на Python — базовые SignalingClient и SourcePeer на aiortc.
+- [x] Реализовать базовый browser-клиент — обнаружение источников и WebRTC viewer foundation.
+- [x] Реализовать WebSocket signaling — подключение, peer/session routing, join/leave, target forwarding.
+- [x] Реализовать SDP offer/answer — определены типы протокола и заложен обмен SDP через signaling.
+- [x] Реализовать ICE candidates — WebRTC peer foundation подготовлен для обмена ICE через signaling.
+
+**Примечание:** этап 1 завершён как базовый архитектурный фундамент. Реальная сквозная передача рабочего стола, полноценная регистрация источника и полностью рабочий SDP/ICE negotiation входят в этап 2/3.
 
 ### Этап 2 — первая рабочая трансляция
 
