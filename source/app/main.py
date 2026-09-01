@@ -7,7 +7,7 @@ import asyncio
 import logging
 import uuid
 
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCPeerConnection, RTCRtpSender, RTCSessionDescription
 
 from source.capture.screen import CaptureConfig, ScreenCapture
 from source.capture.track import DesktopVideoTrack
@@ -15,6 +15,19 @@ from source.webrtc.signaling import SignalingClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("lan-stream-source")
+
+
+async def wait_for_ice(pc: RTCPeerConnection) -> None:
+    if pc.iceGatheringState == "complete":
+        return
+    event = asyncio.Event()
+
+    @pc.on("icegatheringstatechange")
+    def on_ice_state_change() -> None:
+        if pc.iceGatheringState == "complete":
+            event.set()
+
+    await event.wait()
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -45,7 +58,16 @@ async def run(args: argparse.Namespace) -> None:
 
             pc = RTCPeerConnection()
             pcs.add(pc)
-            pc.addTrack(DesktopVideoTrack(capture))
+            sender = pc.addTrack(DesktopVideoTrack(capture))
+
+            # Prefer H.264 for the first LAN implementation. Hardware encoders
+            # are intentionally deferred to the optimization stage.
+            h264_codecs = [
+                codec for codec in RTCRtpSender.getCapabilities("video").codecs
+                if codec.mimeType.lower() == "video/h264"
+            ]
+            if h264_codecs:
+                sender.setCodecPreferences(h264_codecs)
 
             await pc.setRemoteDescription(
                 RTCSessionDescription(
@@ -55,6 +77,7 @@ async def run(args: argparse.Namespace) -> None:
             )
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
+            await wait_for_ice(pc)
 
             local = pc.localDescription
             if local is None:
