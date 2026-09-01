@@ -1,0 +1,5 @@
+aiortc
+ aiohttp
+ mss
+ av
+ opencv-python
